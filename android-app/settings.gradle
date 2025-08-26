@@ -1,0 +1,3 @@
+// Top-level settings.gradle for the Android app project
+include ':app'
+rootProject.name = 'VoiceAIAgent'

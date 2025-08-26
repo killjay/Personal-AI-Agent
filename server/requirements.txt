@@ -1,0 +1,9 @@
+# Server requirements for Voice AI Agent
+fastapi
+uvicorn
+openai-whisper
+requests
+anthropic
+python-multipart
+soundfile
+librosa

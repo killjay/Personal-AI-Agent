@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+.env
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Audio files (temporary recordings)
+*.wav
+*.aac
+*.mp3
+*.m4a
+
+# Android
+android-app/app/build/
+android-app/build/
+android-app/.gradle/
+android-app/local.properties
+android-app/.idea/
+android-app/app/release/
+*.apk
+*.aab
+
+# Models (too large for git)
+*.bin
+*.pt
+*.pth
+
+# Secrets
+.env
+config.json
+secrets.json
