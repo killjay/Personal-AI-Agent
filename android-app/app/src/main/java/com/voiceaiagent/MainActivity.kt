@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.ContactsContract
 import android.provider.MediaStore
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.MotionEvent
 import android.widget.Button
@@ -57,6 +58,10 @@ class MainActivity : AppCompatActivity() {
     // Voice Activity Detection thresholds
     private val silenceThreshold = 300  // Lower threshold for better sensitivity
     private val wakeWordThreshold = 10000 // Higher threshold for wake word detection
+    
+    // Text-to-Speech
+    private lateinit var textToSpeech: TextToSpeech
+    private var isTTSInitialized = false
     private val silenceTimeoutMs = 2000L // 2 seconds of silence to stop recording
     private val maxRecordingTimeMs = 30000L // 30 seconds max recording
 
@@ -66,6 +71,9 @@ class MainActivity : AppCompatActivity() {
         
         recordButton = findViewById(R.id.recordButton)
         statusText = findViewById(R.id.statusText)
+        
+        // Initialize Text-to-Speech
+        initializeTTS()
         
         requestPermissions()
         setupUI()
@@ -368,6 +376,10 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopContinuousListening()
+        if (::textToSpeech.isInitialized) {
+            textToSpeech.stop()
+            textToSpeech.shutdown()
+        }
     }
 
     override fun onPause() {
@@ -430,28 +442,56 @@ class MainActivity : AppCompatActivity() {
             
             when (actionType) {
                 "call" -> {
-                    val contact = action.optString("contact")
+                    // Check for enhanced response format first
+                    val actionTypeField = action.optString("action_type")
+                    val dialString = action.optString("dial_string")
+                    val phoneNumber = action.optString("phone_number")
+                    val contactName = action.optString("contact_name")
+                    val directDial = action.optBoolean("direct_dial", false)
+                    val useContacts = action.optBoolean("use_contacts", true)
                     
-                    // Check if contact is a phone number (contains only digits, +, -, spaces, parentheses)
-                    val phoneNumber = if (contact.matches(Regex("[+\\d\\s\\-()]+")) && contact.replace(Regex("[^\\d]"), "").length >= 3) {
-                        contact // It's already a phone number
-                    } else {
-                        lookupContactNumber(contact) // Look up contact name
+                    Log.d("VoiceAgent", "Enhanced calling - action_type: $actionTypeField, dial_string: $dialString, direct_dial: $directDial")
+                    
+                    val numberToCall = when {
+                        // Priority 1: Use dial_string if present and direct_dial is true
+                        directDial && dialString.isNotEmpty() -> {
+                            Log.d("VoiceAgent", "Using direct dial with number: $dialString")
+                            dialString
+                        }
+                        // Priority 2: Use phone_number if present
+                        phoneNumber.isNotEmpty() -> {
+                            Log.d("VoiceAgent", "Using phone_number: $phoneNumber")
+                            phoneNumber
+                        }
+                        // Priority 3: Fall back to legacy contact field
+                        else -> {
+                            val contact = action.optString("contact")
+                            Log.d("VoiceAgent", "Falling back to contact lookup for: $contact")
+                            
+                            // Check if contact is a phone number (contains only digits, +, -, spaces, parentheses)
+                            if (contact.matches(Regex("[+\\d\\s\\-()]+")) && contact.replace(Regex("[^\\d]"), "").length >= 3) {
+                                contact // It's already a phone number
+                            } else {
+                                lookupContactNumber(contact) // Look up contact name
+                            }
+                        }
                     }
                     
-                    if (phoneNumber != null) {
-                        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$phoneNumber"))
+                    if (numberToCall != null && numberToCall.isNotEmpty()) {
+                        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$numberToCall"))
                         if (intent.resolveActivity(packageManager) != null) {
                             startActivity(intent)
-                            showSuccess("Calling $contact")
+                            val displayName = if (directDial) "number $numberToCall" else (contactName.takeIf { it.isNotEmpty() } ?: numberToCall)
+                            showSuccess("Calling $displayName")
                         } else {
                             showError("Cannot make calls")
                         }
                     } else {
-                        // If no contact found, open dialer with the name to let user choose
+                        // If no contact found, open dialer
+                        val fallbackContact = action.optString("contact")
                         val intent = Intent(Intent.ACTION_DIAL)
                         startActivity(intent)
-                        showError("Contact '$contact' not found, opening dialer")
+                        showError("Contact '$fallbackContact' not found, opening dialer")
                     }
                 }
                 "send_sms" -> {
@@ -487,8 +527,27 @@ class MainActivity : AppCompatActivity() {
                 "error" -> {
                     showError(action.optString("message"))
                 }
+                "speak" -> {
+                    val message = action.optString("message")
+                    Log.d("VoiceAgent", "Speaking message: $message")
+                    speakText(message)
+                }
+                "notes" -> {
+                    val message = action.optString("message")
+                    val noteContent = action.optString("note_content", "")
+                    Log.d("VoiceAgent", "Notes action: $message")
+                    speakText("Note created successfully")
+                    showSuccess(message)
+                }
+                "list" -> {
+                    val message = action.optString("message")
+                    val items = action.optJSONArray("items")
+                    Log.d("VoiceAgent", "List action: $message")
+                    speakText("Added to your list")
+                    showSuccess(message)
+                }
                 else -> {
-                    showError("Unknown action")
+                    showError("Unknown action: $actionType")
                 }
             }
             statusText.text = "Say 'June' then your command"
@@ -812,6 +871,29 @@ class MainActivity : AppCompatActivity() {
             
         } catch (e: Exception) {
             showError("Failed to stop recording: ${e.message}")
+        }
+    }
+
+    private fun initializeTTS() {
+        textToSpeech = TextToSpeech(this) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                isTTSInitialized = true
+                Log.d("VoiceAgent", "TTS initialized successfully")
+            } else {
+                Log.e("VoiceAgent", "TTS initialization failed")
+                showError("Text-to-speech initialization failed")
+            }
+        }
+    }
+
+    private fun speakText(text: String) {
+        if (isTTSInitialized) {
+            Log.d("VoiceAgent", "Speaking: $text")
+            textToSpeech.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
+            showSuccess("Speaking: ${text.take(50)}${if (text.length > 50) "..." else ""}")
+        } else {
+            Log.e("VoiceAgent", "TTS not initialized")
+            showError("Text-to-speech not ready")
         }
     }
 }

@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 ANTHROPIC_API_KEY = "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"
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
+GPTOSS_API_URL = "https://api.gptoss.com/v1/messages"
 
 app = FastAPI()
 
@@ -74,7 +74,7 @@ async def process_voice(file: UploadFile = File(...)):
         if not text:
             return JSONResponse({"action": "error", "message": "No speech detected"})
 
-        # Send to Claude for intent parsing
+    # Send to Gptoss for intent parsing
         headers = {
             "x-api-key": ANTHROPIC_API_KEY,
             "anthropic-version": "2023-06-01",
@@ -92,7 +92,7 @@ or
 Only reply with the JSON object.'''
 
         data = {
-            "model": "claude-3-haiku-20240307",
+            "model": "gptoss-20b-20240307",
             "max_tokens": 256,
             "messages": [
                 {"role": "user", "content": prompt}
@@ -100,13 +100,13 @@ Only reply with the JSON object.'''
         }
         
         try:
-            response = requests.post(CLAUDE_API_URL, headers=headers, json=data, timeout=30)
+            response = requests.post(GPTOSS_API_URL, headers=headers, json=data, timeout=30)
             response.raise_for_status()
             action_json = response.json()["content"][0]["text"]
-            logger.info(f"Claude response: {action_json}")
+            logger.info(f"Gptoss response: {action_json}")
             return JSONResponse(content=action_json)
         except Exception as e:
-            logger.error(f"Claude API error: {e}")
+            logger.error(f"Gptoss API error: {e}")
             return JSONResponse({"action": "error", "message": f"AI processing failed: {str(e)}"}, status_code=500)
         """
 

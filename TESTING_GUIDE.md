@@ -47,7 +47,7 @@
    - The app will:
      - Send your audio to the server
      - Server transcribes with Whisper
-     - Server sends to Claude AI for intent parsing
+   - Server sends to Gptoss AI for intent parsing
      - App receives action and executes it
      - Shows success/error notification
 
@@ -76,7 +76,7 @@
 ## Current Server Status
 🟢 Server running at: http://192.168.1.120:5005
 🟢 Whisper model loaded
-🟢 Claude API configured
+🟢 Gptoss API configured
 🟢 Ready to receive voice commands
 
 Your Voice AI Agent is now ready for testing!
